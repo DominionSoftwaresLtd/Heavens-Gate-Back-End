@@ -74,6 +74,7 @@ export interface BookingRecord {
   holdExpiresAt?: number; // timestamp
   assignedRoomId?: string;
   assignedRoomNumber?: string;
+  assignedBedId?: string;
   assignedBedNumber?: string;
   ticketId?: string;
   createdAt: string;
@@ -223,6 +224,15 @@ class DatabaseStore {
   testimonies: TestimonyRecord[] = [];
   prayerRequests: PrayerRequestRecord[] = [];
   transportRoutes: TransportRoute[] = [];
+  announcements: Array<{
+    id: string;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'alert';
+    active: boolean;
+    createdAt: string;
+    author: string;
+  }> = [];
 
   constructor() {
     this.seedInitialData();
@@ -231,6 +241,29 @@ class DatabaseStore {
   seedInitialData() {
     const salt = bcrypt.genSaltSync(10);
     const defaultPasswordHash = bcrypt.hashSync('HeavensGate@2026', salt);
+    const adminPasswordHash = bcrypt.hashSync('HeavensGate', salt);
+
+    // Initial Announcements
+    this.announcements = [
+      {
+        id: 'ann-1',
+        title: 'Morning Prayer & Fasting Tea Notice',
+        message: 'Free hot boiling water points are fully operational at Shiloh Refectory. Scheduled tea service is served at 06:30, 13:00, and 18:30 daily.',
+        type: 'info',
+        active: true,
+        createdAt: new Date().toISOString(),
+        author: 'Pastor Peter Mwangi'
+      },
+      {
+        id: 'ann-2',
+        title: 'Consecration & Gate Inspection Reminder',
+        message: 'All arriving pilgrims must present their National ID/Passport and submit luggage for routine no-food screening at the main gatehouse.',
+        type: 'warning',
+        active: true,
+        createdAt: new Date().toISOString(),
+        author: 'Officer David Kiprono'
+      }
+    ];
 
     // 1. Initial Users (All Roles)
     this.users = [
@@ -238,8 +271,8 @@ class DatabaseStore {
         id: 'usr-admin-1',
         name: 'Pastor Peter Mwangi',
         phone: '0711000001',
-        email: 'admin@heavensgate.or.ke',
-        passwordHash: defaultPasswordHash,
+        email: 'admin@heavensgate.org',
+        passwordHash: adminPasswordHash,
         role: 'system_admin',
         createdAt: new Date().toISOString()
       },
