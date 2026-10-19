@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
-import { db, GateEventRecord } from '../database/store.js';
+import { db, GateEventRecord, VisitRecord } from '../database/store.js';
 import { config } from '../config/index.js';
+import { EmailService } from './emailService.js';
 
 export class GateService {
   // Check gate opening hours (5:00 AM - 8:00 PM)
@@ -64,13 +65,46 @@ export class GateService {
     }
 
     // 3. Update User/Visitor record if exists
-    const user = db.users.find(u => u.id === ticket.visitorId);
+    const user = db.users.find(u => u.id === ticket.visitorId || (ticket.phone && u.phone === ticket.phone));
     if (user) {
       user.totalVisits = (user.totalVisits || 0) + 1;
       user.isFirstTime = false;
+      user.updatedAt = nowIso;
     }
 
-    // 4. Create Immutable Gate Event Record
+    // 4. Create or Update Separate Chronological Visit Record
+    let visit = db.visits.find(v => v.bookingReference === ticket.bookingReference || v.ticketReference === ticket.ticketReference);
+    if (visit) {
+      visit.status = 'checked_in';
+      visit.checkInTime = nowIso;
+      visit.officerName = officerName;
+      visit.updatedAt = nowIso;
+    } else {
+      visit = {
+        id: uuidv4(),
+        memberId: user?.id || ticket.visitorId,
+        visitorName: ticket.visitorName,
+        visitorPhone: ticket.phone,
+        visitorEmail: booking?.visitorEmail || user?.email || '',
+        bookingId: booking?.id || ticket.bookingId,
+        bookingReference: ticket.bookingReference,
+        ticketId: ticket.id,
+        ticketReference: ticket.ticketReference,
+        checkInDate: ticket.checkInDate,
+        checkOutDate: ticket.checkOutDate,
+        checkInTime: nowIso,
+        status: 'checked_in',
+        roomNumber: booking?.assignedRoomNumber,
+        bedNumber: booking?.assignedBedNumber,
+        officerName,
+        notes: notes || 'Admitted via QR Gate Scan.',
+        createdAt: nowIso,
+        updatedAt: nowIso
+      };
+      db.visits.push(visit);
+    }
+
+    // 5. Create Immutable Gate Event Record
     const gateEvent: GateEventRecord = {
       id: uuidv4(),
       ticketId: ticket.id,
@@ -85,10 +119,23 @@ export class GateService {
 
     db.gateEvents.push(gateEvent);
 
+    // 6. Automated Welcome Email Trigger (Safe non-blocking execution)
+    const emailToUse = booking?.visitorEmail || user?.email || '';
+    if (emailToUse) {
+      EmailService.sendWelcomeEmail({
+        visitorName: ticket.visitorName,
+        visitorEmail: emailToUse,
+        visitorId: user?.id || ticket.visitorId,
+        bookingReference: ticket.bookingReference,
+        ticketReference: ticket.ticketReference
+      }).catch(err => console.error('[GateService] Welcome email dispatch error:', err));
+    }
+
     return {
       success: true,
       ticket,
       booking,
+      visit,
       assignedRoom: booking?.assignedRoomNumber || 'Mount Zion Z-101',
       assignedBed: booking?.assignedBedNumber || 'Bed 1',
       gateEvent,
@@ -129,6 +176,14 @@ export class GateService {
       }
     }
 
+    // Update Chronological Visit Record
+    const visit = db.visits.find(v => v.bookingReference === ticket.bookingReference || v.ticketReference === ticket.ticketReference);
+    if (visit) {
+      visit.status = 'checked_out';
+      visit.checkOutTime = nowIso;
+      visit.updatedAt = nowIso;
+    }
+
     const gateEvent: GateEventRecord = {
       id: uuidv4(),
       ticketId: ticket.id,
@@ -148,10 +203,24 @@ export class GateService {
 
     db.gateEvents.push(gateEvent);
 
+    // Automated Thank-You Email Trigger (Safe non-blocking execution)
+    const user = db.users.find(u => u.id === ticket.visitorId || (ticket.phone && u.phone === ticket.phone));
+    const emailToUse = booking?.visitorEmail || user?.email || '';
+    if (emailToUse) {
+      EmailService.sendThankYouEmail({
+        visitorName: ticket.visitorName,
+        visitorEmail: emailToUse,
+        visitorId: user?.id || ticket.visitorId,
+        bookingReference: ticket.bookingReference,
+        ticketReference: ticket.ticketReference
+      }).catch(err => console.error('[GateService] Thank-you email dispatch error:', err));
+    }
+
     return {
       success: true,
       ticket,
       booking,
+      visit,
       message: `Checkout successful for ${ticket.visitorName}. Go with God's blessings!`
     };
   }

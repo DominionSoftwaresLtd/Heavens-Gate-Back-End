@@ -15,6 +15,7 @@ import gateRoutes from './routes/gateRoutes.js';
 import ministryRoutes from './routes/ministryRoutes.js';
 import utilityRoutes from './routes/utilityRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -57,6 +58,7 @@ app.use('/api/v1/gate', gateRoutes);
 app.use('/api/v1/ministry', ministryRoutes);
 app.use('/api/v1/utility', utilityRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/messages', messageRoutes);
 
 // Socket.io Real-time connection handler
 io.on('connection', (socket) => {
