@@ -15,7 +15,13 @@ export interface UserRecord {
   nationalId?: string;
   isFirstTime?: boolean;
   totalVisits?: number;
+  communicationPreferences?: {
+    welcomeEmail?: boolean;
+    departureEmail?: boolean;
+    smsAlerts?: boolean;
+  };
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface AccommodationCategory {
@@ -165,6 +171,7 @@ export interface PrayerWatch {
 
 export interface TestimonyRecord {
   id: string;
+  authorId?: string;
   authorName: string;
   countyOrCity: string;
   title: string;
@@ -172,13 +179,17 @@ export interface TestimonyRecord {
   category: 'healing' | 'deliverance' | 'financial_breakthrough' | 'family_restoration' | 'spiritual_growth';
   status: 'approved' | 'pending' | 'rejected';
   likesCount: number;
+  likedBy?: string[];
   replies: Array<{
     id: string;
+    authorId?: string;
     authorName: string;
     comment: string;
     timestamp: string;
+    status?: 'approved' | 'pending' | 'flagged';
   }>;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PrayerRequestRecord {
@@ -193,7 +204,48 @@ export interface PrayerRequestRecord {
   status: 'received' | 'assigned' | 'in_prayer' | 'answered';
   assignedIntercessor?: string;
   responseNote?: string;
+  duplicateCheckKey?: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface EmailLogRecord {
+  id: string;
+  emailType: 'welcome' | 'thank_you' | 'booking_confirmation' | 'general';
+  recipientEmail: string;
+  recipientName: string;
+  subject: string;
+  bodyText: string;
+  visitorId?: string;
+  bookingReference: string;
+  ticketReference?: string;
+  status: 'sent' | 'delivered' | 'failed' | 'simulated';
+  sentAt: string;
+  failureReason?: string;
+  retryCount: number;
+}
+
+export interface VisitRecord {
+  id: string;
+  memberId: string;
+  visitorName: string;
+  visitorPhone: string;
+  visitorEmail?: string;
+  bookingId: string;
+  bookingReference: string;
+  ticketId?: string;
+  ticketReference?: string;
+  checkInDate: string;
+  checkOutDate: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  status: 'expected' | 'checked_in' | 'checked_out' | 'cancelled';
+  roomNumber?: string;
+  bedNumber?: string;
+  officerName?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TransportRoute {
@@ -224,6 +276,8 @@ class DatabaseStore {
   testimonies: TestimonyRecord[] = [];
   prayerRequests: PrayerRequestRecord[] = [];
   transportRoutes: TransportRoute[] = [];
+  emailLogs: EmailLogRecord[] = [];
+  visits: VisitRecord[] = [];
   announcements: Array<{
     id: string;
     title: string;
@@ -574,6 +628,25 @@ class DatabaseStore {
       orientationBriefingCompleted: true,
       dressCodeVerified: true,
       luggageChecked: true
+    });
+
+    this.visits.push({
+      id: 'vst-sample-001',
+      memberId: 'usr-pilgrim-1',
+      visitorName: 'John Kamau Karanja',
+      visitorPhone: '0722123456',
+      visitorEmail: 'kamau@example.com',
+      bookingId: sampleBookingId,
+      bookingReference: sampleBookingRef,
+      ticketId: sampleTicketId,
+      ticketReference: sampleTicketRef,
+      checkInDate: '2026-10-15',
+      checkOutDate: '2026-10-18',
+      status: 'expected',
+      roomNumber: 'Z-101',
+      bedNumber: 'Bed 1',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
 
     // 6. Interactive Campus Map Features (Accurate Layout for Heavens Gate Gilgil)
